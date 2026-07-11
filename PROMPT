@@ -1,0 +1,417 @@
+Phase 1 – Authentication, Accounts & Security
+Email, phone, OTP, Google, Apple, Facebook login.
+Password reset, email verification, phone verification.
+JWT with refresh tokens.
+Two-factor authentication.
+Device management.
+Login history.
+Session management.
+Audit logs.
+Rate limiting.
+CSRF/XSS protection.
+Role-based access control.
+Phase 2 – User Profiles & Reputation
+Public profiles.
+Seller profile.
+Buyer profile.
+Verification badges.
+Profile photo and banner.
+Bio.
+Join date.
+Member since.
+Seller rating.
+Buyer rating.
+Number of sales.
+Number of purchases.
+Followers.
+Following.
+Reviews.
+Trust score.
+Response rate.
+Average response time.
+Last active.
+Social links.
+Preferred language and currency.
+Phase 3 – Seller & Shop Membership System
+Individual Sellers (Default)
+
+Every registered user can become a seller without creating a shop.
+
+Features
+List unlimited new and used items (subject to platform limits)
+Manage personal listings
+Edit, duplicate, archive, renew, or delete listings
+Track active, sold, pending, and expired listings
+Manage orders and inquiries
+View basic sales and listing statistics
+Receive buyer messages
+Manage shipping and pickup preferences
+Manage payout methods
+View transaction history
+Seller reputation and ratings
+Listing performance insights
+Saved listing drafts
+Listing scheduling
+Vacation mode (hide listings temporarily)
+
+Individual sellers do not have:
+
+Public storefront
+Shop page
+Shop URL
+Shop banner
+Shop logo
+Shop branding
+Shop followers
+Advanced business analytics
+Shop Membership (Professional Sellers)
+
+Users can upgrade to a Shop Membership to unlock a dedicated branded storefront and advanced selling tools.
+
+Public Shop Features
+Dedicated public shop page
+Custom shop URL
+Shop name
+Shop logo
+Shop banner
+Business description
+Contact information
+Business hours
+Shop location (optional)
+Social media links
+Shop policies
+Shipping policies
+Return and refund policies
+Warranty information
+Featured products
+Product collections
+Shop categories
+Search within shop
+Customer reviews
+Shop ratings
+Verified Shop badge
+Featured Shop badge
+Shop followers
+Shareable shop page
+SEO-optimized shop profile
+Shop Dashboard
+Business overview
+Sales dashboard
+Revenue dashboard
+Profit dashboard
+Order management
+Inventory management
+Listing analytics
+Customer analytics
+Traffic analytics
+Conversion analytics
+Best-selling products
+Low stock alerts
+Marketing tools
+Coupon creation
+Promotions and discounts
+Staff account management (optional)
+Bulk product import/export
+Store customization
+Shop announcements
+Vacation mode
+Saved product templates
+Business reports
+Financial reports
+Tax reports
+Payout management
+Shop Verification
+Business verification
+Identity verification (KYC)
+Business license verification (optional)
+Verified Shop badge
+Premium Shop badge
+Featured Shop eligibility
+Membership Plans
+Basic Shop
+Professional Shop
+Business Shop
+Enterprise Shop
+
+Each membership tier unlocks additional features, higher listing limits, advanced analytics, promotional tools, and increased visibility.
+
+This structure keeps the experience clean: every user can sell, but only members who subscribe to or qualify for a Shop Membership receive a dedicated storefront and business-oriented features. It avoids cluttering the platform with thousands of empty shop pages while giving professional sellers a branded presence.
+
+Phase 4 – Listing Management
+
+Support listings for:
+
+New items.
+Used items.
+Refurbished items.
+Open-box items.
+Collectibles.
+Handmade items.
+Digital products (optional).
+Services (optional).
+
+Each listing includes:
+
+Unlimited photos.
+Videos.
+360° media.
+Rich descriptions.
+AI-generated descriptions.
+AI title suggestions.
+Item condition.
+Brand.
+Model.
+Category.
+Tags.
+Attributes.
+Variants (if applicable).
+Serial numbers (optional).
+Warranty details.
+Pickup or shipping options.
+Price history.
+Listing status (draft, active, sold, archived).
+Renew listing.
+Relist sold items.
+Duplicate listing.
+Phase 5 – Advanced Search & Discovery
+Instant search.
+Autocomplete.
+AI-powered search.
+Typo correction.
+Saved searches.
+Recent searches.
+Trending searches.
+Voice search.
+Image search.
+Barcode search (optional).
+Category browsing.
+Advanced filters.
+Radius/local search.
+Map view.
+Nearby listings.
+Recently viewed.
+Recommended listings.
+Personalized feed.
+Phase 6 – Marketplace Experience
+Wishlist.
+Favorites.
+Save searches.
+Recently viewed.
+Compare items.
+Follow sellers.
+Follow categories.
+Share listings.
+QR code sharing.
+Social sharing.
+Report listing.
+Report seller.
+Block seller.
+Hidden listings.
+Recommended listings.
+Sponsored listings.
+Featured listings.
+Phase 7 – Offers, Negotiation & Auctions
+Make an offer.
+Counter offers.
+Offer expiration.
+Offer history.
+Accept/decline offers.
+Instant buy.
+Reserve item.
+Auction listings.
+Bidding history.
+Auto-bidding.
+Buy-it-now.
+Best offer.
+Negotiation chat.
+Price suggestions.
+Phase 8 – Messaging System
+Buyer–seller chat.
+File sharing.
+Image sharing.
+Voice messages.
+Read receipts.
+Typing indicators.
+Push notifications.
+Translation (optional).
+Message search.
+Conversation archive.
+Report conversation.
+Spam filtering.
+AI moderation.
+Phase 9 – Checkout & Orders
+Guest checkout (if applicable).
+Shipping address management.
+Pickup arrangements.
+Local meetup options.
+Multiple payment methods.
+Wallet.
+Promo codes.
+Coupons.
+Gift cards.
+Tax calculation.
+Shipping calculation.
+Invoice generation.
+Order timeline.
+Cancellation requests.
+Return requests.
+Refund workflow.
+Phase 10 – Payments
+Stripe.
+PayPal.
+Bank transfer.
+Cash on delivery.
+Wallet.
+Escrow payments.
+Split payments.
+Partial payments (optional).
+Payment disputes.
+Automatic payouts.
+Seller earnings dashboard.
+Commission management.
+Transaction history.
+Phase 11 – Shipping & Local Delivery
+Shipping labels.
+Courier integrations.
+Tracking.
+Pickup scheduling.
+Local delivery.
+Meet-up management.
+Shipping insurance.
+Delivery confirmation.
+Multiple shipping methods.
+Shipping rules.
+Phase 12 – Reviews, Ratings & Trust
+Buyer reviews.
+Seller reviews.
+Item reviews.
+Verified purchase badges.
+Photo reviews.
+Video reviews.
+Q&A.
+Seller response.
+Community reporting.
+Fraud detection.
+Trust score calculations.
+Phase 13 – Notifications
+Email.
+SMS.
+Push notifications.
+In-app notifications.
+Offer updates.
+Chat updates.
+Price drops.
+Saved search matches.
+Item sold.
+Listing expires.
+Payment updates.
+Shipping updates.
+Phase 14 – Admin Portal (Redesign Allowed)
+Dashboard.
+User management.
+Seller approvals.
+Listing moderation.
+Report moderation.
+Fraud detection.
+KYC review.
+Category management.
+Commission settings.
+Payment management.
+Payout management.
+CMS.
+Support tickets.
+Analytics.
+Audit logs.
+Feature flags.
+System health.
+Backup management.
+Phase 15 – AI Features
+AI-generated listing titles.
+AI-generated descriptions.
+AI category suggestions.
+AI pricing recommendations.
+AI image enhancement.
+AI background removal.
+AI duplicate listing detection.
+AI scam detection.
+AI fraud detection.
+AI moderation.
+AI recommendations.
+AI search.
+AI support chatbot.
+Phase 16 – Marketing & Growth
+Featured listings.
+Sponsored listings.
+Promoted listings.
+Referral program.
+Affiliate program.
+Loyalty points.
+Coupons.
+Flash promotions.
+Seasonal campaigns.
+Newsletter.
+Blog.
+SEO tools.
+Social media sharing.
+Referral tracking.
+Phase 17 – Business Intelligence
+Revenue analytics.
+Seller analytics.
+Buyer analytics.
+Listing performance.
+Search analytics.
+Conversion rates.
+Heatmaps.
+User retention.
+Fraud reports.
+Financial reports.
+Commission reports.
+Marketplace growth metrics.
+Phase 18 – Enterprise Infrastructure
+Docker.
+CI/CD.
+Background jobs.
+Queue workers.
+Caching.
+Image optimization.
+CDN support.
+Object storage.
+Search indexing.
+Monitoring.
+Logging.
+Health checks.
+Automated backups.
+Disaster recovery.
+API documentation.
+REST and GraphQL APIs.
+Webhooks.
+High-Impact Features Worth Adding
+
+These are the kinds of features that make a marketplace feel premium and modern:
+
+AI-powered photo enhancement and background removal
+AI-estimated market price for used items
+"Is this a good deal?" price analysis
+Seller response-time badges
+Trusted seller verification
+Verified buyer badges
+Live chat with read receipts
+Saved searches with instant alerts
+Local map-based browsing
+Nearby pickup suggestions
+Escrow payments for expensive items
+Identity verification for high-value sellers
+Anti-scam detection for suspicious listings and messages
+Listing boost/promoted ads
+Seller subscription plans (Basic, Pro, Business)
+Admin fraud dashboard
+Duplicate listing detection
+Smart recommendations based on browsing behavior
+Personalized home feed
+Multi-language and multi-currency support
+Comprehensive moderation tools for listings, users, and messages
+
+This roadmap is better aligned with a classified and peer-to-peer marketplace where users sell both new and pre-owned items, while still leaving room to support professional stores and businesses alongside individual sellers.
+At the start of every new phase, use a prompt like this:
+
+"Implement Phase X completely. Analyze the existing project first. Preserve the current customer-facing UI exactly as it is unless a new feature requires a minimal addition. You may redesign the admin and seller portals for better usability and scalability. Generate production-ready code only—no placeholders, no TODOs, no pseudocode. Fully implement frontend, backend, database migrations, APIs, validation, authentication, authorization, tests, documentation, and responsive UI. If the response reaches the output limit, continue automatically from the exact point where it stopped until the phase is fully complete."
