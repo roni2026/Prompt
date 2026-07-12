@@ -1,0 +1,31 @@
+2. Failed to run sql query: ERROR:  42704: type "public.review_status" does not exist
+LINE 93:   status public.review_status not null default 'pending',
+
+5. Failed to run sql query: ERROR:  42601: syntax error at or near "BEGIN"
+LINE 11: DO $$ BEGIN
+               ^
+8. Failed to run sql query: ERROR:  42883: function is_active_or_owner() does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  SQL statement "create policy "Select active shops" on public.shops for select using (
+  is_active_or_owner()
+)"
+PL/pgSQL function inline_code_block line 2 at SQL statement
+
+9. Failed to run sql query: ERROR:  42601: syntax error at or near "BEGIN"
+LINE 30: DO $$ BEGIN
+               ^
+
+10. Failed to run sql query: ERROR:  42601: syntax error at or near "BEGIN"
+LINE 15: DO $$ BEGIN
+
+11. Failed to run sql query: ERROR:  42601: syntax error at or near "BEGIN"
+LINE 16: DO $$ BEGIN
+
+12. Failed to run sql query: ERROR:  42601: syntax error at or near "BEGIN"
+LINE 16: DO $$ BEGIN
+
+13. Failed to run sql query: ERROR:  42601: syntax error at or near "not"
+LINE 294: create trigger if not exists trg_notifications_updated_at
+
+14. Failed to run sql query: ERROR:  42601: syntax error at or near "not"
+LINE 178: create trigger if not exists trg_admin_widgets_updated_at
