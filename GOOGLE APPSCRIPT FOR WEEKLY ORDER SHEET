@@ -1,0 +1,649 @@
+/**
+ * Unified Custom Menu for Google Sheets
+ * Loads all weekly operations in chronological order.
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('📦 Weekly Operations')
+    .addItem('1. 📥 Sync Extracted PO (Dates & Quantities)', 'syncExtractedPO')
+    .addSeparator()
+    .addItem('2. 📤 Send Orders to Purchasing Orders', 'exportOrdersToPurchasing')
+    .addSeparator()
+    .addItem('3. ▶ Run Weekly Sync & Masterdata Archive', 'runWeeklySync')
+    .addSeparator()
+    .addItem('4. 🔄 Sunday Rollover (Reset for New Week)', 'rolloverToNewWeek')
+    .addToUi();
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * STEP 1: SYNC EXTRACTED PO
+ * --------------------------------------------------------------------------
+ * Syncs PO Date -> Col J (Last Ordered), Order Qty -> Col K (Pending Qty),
+ * and Req Delivery Date -> Col L (Pending Date).
+ */
+function syncExtractedPO() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const poSheet = ss.getSheetByName('Extracted PO');
+
+  if (!poSheet) {
+    ui.alert('Error', 'Could not find tab "Extracted PO". Please ensure it exists before syncing.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const poLastRow = poSheet.getLastRow();
+  if (poLastRow < 2) {
+    ui.alert('Notice', 'No data found in "Extracted PO".', ui.ButtonSet.OK);
+    return;
+  }
+
+  const poData = poSheet.getDataRange().getValues();
+  const poHeaders = poData[0].map(h => String(h).trim().toLowerCase());
+
+  const idxPoDate = poHeaders.indexOf('po date') !== -1 ? poHeaders.indexOf('po date') : 1;
+  const idxReqDeliv = poHeaders.indexOf('req deliv date') !== -1 ? poHeaders.indexOf('req deliv date') : 3;
+  const idxItemCode = poHeaders.indexOf('item #') !== -1 ? poHeaders.indexOf('item #') : 7;
+  const idxOrderQty = poHeaders.indexOf('order qty') !== -1 ? poHeaders.indexOf('order qty') : 10;
+
+  const poMap = new Map();
+  for (let r = 1; r < poData.length; r++) {
+    const row = poData[r];
+    const code = String(row[idxItemCode] || '').trim();
+    if (!code) continue;
+
+    const rawReqDate = row[idxReqDeliv];
+    const rawPoDate = row[idxPoDate];
+    const qty = Number(row[idxOrderQty]) || 0;
+
+    const formattedReqDate = formatDeliveryDateWithDay(rawReqDate);
+    const formattedPoDate = formatSimpleDate(rawPoDate);
+
+    if (poMap.has(code)) {
+      const existing = poMap.get(code);
+      existing.qty += qty;
+      if (!existing.reqDate && formattedReqDate) existing.reqDate = formattedReqDate;
+      if (!existing.poDate && formattedPoDate) existing.poDate = formattedPoDate;
+    } else {
+      poMap.set(code, {
+        qty: qty,
+        poDate: formattedPoDate,
+        reqDate: formattedReqDate
+      });
+    }
+  }
+
+  const storeSheets = [
+    'Beverage',
+    'Dry Store 1',
+    'Dry Store 2',
+    'Dry Store 3',
+    'Freezer 1',
+    'Freezer 2',
+    'General'
+  ];
+
+  let matchedCount = 0;
+
+  storeSheets.forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+
+    const numRows = lastRow - 1;
+    // Col B = Code (2), Col J = Last Ordered (10), Col K = Pending Qty (11), Col L = Pending Date (12)
+    const codes = sheet.getRange(2, 2, numRows, 1).getValues();
+    const lastOrderedRange = sheet.getRange(2, 10, numRows, 1);
+    const pendingQtyRange = sheet.getRange(2, 11, numRows, 1);
+    const pendingDateRange = sheet.getRange(2, 12, numRows, 1);
+
+    const lastOrderedVals = lastOrderedRange.getValues();
+    const pendingQtyVals = pendingQtyRange.getValues();
+    const pendingDateVals = pendingDateRange.getValues();
+
+    for (let i = 0; i < codes.length; i++) {
+      const itemCode = String(codes[i][0] || '').trim();
+      if (itemCode && poMap.has(itemCode)) {
+        const poItem = poMap.get(itemCode);
+        if (poItem.poDate) lastOrderedVals[i][0] = poItem.poDate;
+        if (poItem.qty > 0) pendingQtyVals[i][0] = poItem.qty;
+        if (poItem.reqDate) pendingDateVals[i][0] = poItem.reqDate;
+        matchedCount++;
+      }
+    }
+
+    lastOrderedRange.setValues(lastOrderedVals);
+    pendingQtyRange.setValues(pendingQtyVals);
+    pendingDateRange.setValues(pendingDateVals);
+  });
+
+  ui.alert(
+    'Sync Complete',
+    `Successfully synced ${matchedCount} records from "Extracted PO" across store sheets.\n\n` +
+    'Delivery dates and pending quantities have been written to the store sheets.',
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * STEP 2: EXPORT ORDERS TO PURCHASING ORDERS WORKBOOK
+ * --------------------------------------------------------------------------
+ */
+function exportOrdersToPurchasing() {
+  const sourceSs = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+
+  const purchasingSpreadsheetId = "1bz5UcM8WiyAlROBz7gUK-h02v574S83BEDNoSFMpa3M";
+  let targetSs;
+  try {
+    targetSs = SpreadsheetApp.openById(purchasingSpreadsheetId);
+  } catch (err) {
+    ui.alert('Error', 'Could not open Purchasing Orders sheet. Please check permissions or ID: ' + err.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  const orderDate = Utilities.formatDate(new Date(), "Indian/Maldives", "yyyy-MM-dd");
+
+  // Lookup Item Type, Preferred Brand, Preferred Type, and Group from Variables tab
+  const itemTypeMap = new Map();
+  const preferredBrandMap = new Map();
+  const preferredTypeMap = new Map();
+  const groupMap = new Map();
+
+  const variablesSheet = sourceSs.getSheetByName("Variables");
+  if (variablesSheet) {
+    const varLastRow = variablesSheet.getLastRow();
+    const varLastCol = Math.max(variablesSheet.getLastColumn(), 8);
+    if (varLastRow > 1) {
+      const varData = variablesSheet.getRange(1, 1, varLastRow, varLastCol).getValues();
+      const headers = varData[0].map(h => String(h || '').trim().toLowerCase());
+
+      let idxCode = headers.indexOf('code');
+      let idxItemType = headers.indexOf('item type');
+      let idxBrand = headers.indexOf('preferred brand');
+      let idxPrefType = headers.indexOf('preferred type');
+      let idxGroup = headers.indexOf('group');
+
+      // Fallbacks if header names slightly differ
+      if (idxCode === -1) idxCode = 0;
+      if (idxItemType === -1) idxItemType = 3;
+      if (idxBrand === -1) idxBrand = 5;
+      if (idxPrefType === -1) idxPrefType = 6;
+      if (idxGroup === -1) idxGroup = 7;
+
+      for (let r = 1; r < varData.length; r++) {
+        const row = varData[r];
+        const code = String(row[idxCode] || '').trim();
+        if (!code) continue;
+
+        if (row[idxItemType]) {
+          itemTypeMap.set(code, String(row[idxItemType]).trim().toLowerCase());
+        }
+        if (row[idxBrand] !== undefined && row[idxBrand] !== null) {
+          const brand = String(row[idxBrand]).trim();
+          if (brand) preferredBrandMap.set(code, brand);
+        }
+        if (row[idxPrefType] !== undefined && row[idxPrefType] !== null) {
+          const pType = String(row[idxPrefType]).trim();
+          if (pType) preferredTypeMap.set(code, pType);
+        }
+        if (row[idxGroup] !== undefined && row[idxGroup] !== null) {
+          const grp = String(row[idxGroup]).trim();
+          if (grp) groupMap.set(code, grp);
+        }
+      }
+    }
+  }
+
+  const targetTabs = {
+    general: targetSs.getSheetByName("Store General"),
+    bev: targetSs.getSheetByName("Store Bev"),
+    meatSeafood: targetSs.getSheetByName("Meat/Seafood/Fish"),
+    localFood: targetSs.getSheetByName("Store Local Food"),
+    foreign: targetSs.getSheetByName("Store Foreign")
+  };
+
+  for (const [key, sheet] of Object.entries(targetTabs)) {
+    if (!sheet) {
+      ui.alert('Missing Tab', `Target sheet "${key}" not found in Purchasing Orders workbook.`, ui.ButtonSet.OK);
+      return;
+    }
+  }
+
+  const routedOrders = {
+    general: [],
+    bev: [],
+    meatSeafood: [],
+    localFood: [],
+    foreign: []
+  };
+
+  const storeSheets = [
+    'Beverage',
+    'Dry Store 1',
+    'Dry Store 2',
+    'Dry Store 3',
+    'Freezer 1',
+    'Freezer 2',
+    'General'
+  ];
+
+  storeSheets.forEach(sheetName => {
+    const sheet = sourceSs.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+
+    // Col A to L (index 0 to 11): 0:SL, 1:Code, 2:Item, 3:Unit, 4:In Stock, 5:Order Qty, 6:Supply Type, 7:Approved
+    const data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+
+    data.forEach(row => {
+      const code = String(row[1] || '').trim();
+      const item = String(row[2] || '').trim();
+      const unit = row[3];
+      const inStock = (row[4] === '' || isNaN(row[4])) ? 0 : Number(row[4]);
+      const orderQty = row[5];
+      const supplyType = String(row[6] || '').trim().toLowerCase(); // Col G (index 6)
+
+      const hasOrder = (
+        orderQty !== "" &&
+        orderQty !== null &&
+        String(orderQty).trim() !== "" &&
+        !isNaN(orderQty) &&
+        Number(orderQty) > 0
+      );
+
+      if (!item || !hasOrder) return;
+
+      const orderItem = {
+        code: code,
+        item: item,
+        unit: unit,
+        orderQty: Number(orderQty),
+        inStock: inStock,
+        sheetName: sheetName,
+        supplyType: supplyType,
+        preferredBrand: preferredBrandMap.get(code) || '',
+        preferredType: preferredTypeMap.get(code) || '',
+        group: groupMap.get(code) || ''
+      };
+
+      const detectedType = itemTypeMap.get(code) || '';
+
+      const isMeatOrPoultry = /chicken|sausage|beef|pork|duck|wing|thigh|meat|bacon|ham|fish|seafood|lobster|prawn|squid|scallop|shrimp|clam/i.test(item);
+
+      // Routing logic: Meat/Seafood items always route to meatSeafood first
+      if (detectedType === 'meat' || sheetName === 'Freezer 2' || sheetName === 'Freezer 1' || isMeatOrPoultry) {
+        routedOrders.meatSeafood.push(orderItem);
+      } else if (detectedType === 'bev' || sheetName === 'Beverage') {
+        routedOrders.bev.push(orderItem);
+      } else if (detectedType === 'chemical' || detectedType === 'general' || sheetName === 'General') {
+        routedOrders.general.push(orderItem);
+      } else if (detectedType === 'food' || supplyType === 'foreign') {
+        if (supplyType === 'foreign') {
+          routedOrders.foreign.push(orderItem);
+        } else {
+          routedOrders.localFood.push(orderItem);
+        }
+      } else {
+        routedOrders.localFood.push(orderItem);
+      }
+    });
+  });
+
+  function populateTargetTab(sheet, items, includeGroup) {
+    const lastRow = sheet.getLastRow();
+    const lastCol = Math.max(sheet.getLastColumn(), includeGroup ? 10 : 9);
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
+    }
+
+    const headers = includeGroup
+      ? ["Date of Order", "SL", "Code", "Item", "Unit", "Order QTY", "In Stock", "Preferred Brand", "Preferred Type", "Group"]
+      : ["Date of Order", "SL", "Code", "Item", "Unit", "Order QTY", "In Stock", "Preferred Brand", "Preferred Type"];
+
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers]);
+    headerRange.setFontWeight("bold");
+
+    if (items.length === 0) return;
+
+    // Sorting: If tab includes group, HC items are sorted first, then by In Stock ascending
+    if (includeGroup) {
+      items.sort((a, b) => {
+        const aIsHC = (String(a.group || '').trim().toUpperCase() === 'HC') ? 1 : 0;
+        const bIsHC = (String(b.group || '').trim().toUpperCase() === 'HC') ? 1 : 0;
+        if (aIsHC !== bIsHC) {
+          return bIsHC - aIsHC; // HC items on top
+        }
+        return a.inStock - b.inStock;
+      });
+    } else {
+      items.sort((a, b) => a.inStock - b.inStock);
+    }
+
+    const rows = items.map((it, idx) => {
+      const baseRow = [
+        orderDate,
+        idx + 1,
+        it.code,
+        it.item,
+        it.unit,
+        it.orderQty,
+        it.inStock,
+        it.preferredBrand || "",
+        it.preferredType || ""
+      ];
+      if (includeGroup) {
+        baseRow.push(it.group || "");
+      }
+      return baseRow;
+    });
+
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }
+
+  // Populate tabs: includeGroup = true for meatSeafood and foreign
+  populateTargetTab(targetTabs.general, routedOrders.general, false);
+  populateTargetTab(targetTabs.bev, routedOrders.bev, false);
+  populateTargetTab(targetTabs.meatSeafood, routedOrders.meatSeafood, true);
+  populateTargetTab(targetTabs.localFood, routedOrders.localFood, false);
+  populateTargetTab(targetTabs.foreign, routedOrders.foreign, true);
+
+  ui.alert(
+    'Purchasing Orders Updated',
+    `Successfully exported weekly orders with Date of Order (${orderDate}):\n\n` +
+    `• Meat/Seafood/Fish (Meat Items): ${routedOrders.meatSeafood.length} items (HC grouped first)\n` +
+    `• Store Foreign (Foreign Food): ${routedOrders.foreign.length} items (HC grouped first)\n` +
+    `• Store Local Food (Local Food): ${routedOrders.localFood.length} items\n` +
+    `• Store Bev (Beverage): ${routedOrders.bev.length} items\n` +
+    `• Store General (General & Chemical): ${routedOrders.general.length} items\n\n` +
+    `Group 'HC' (Col J) and sorting applied to Meat/Seafood/Fish and Store Foreign tabs.`,
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * STEP 3: RUN WEEKLY SYNC & MASTERDATA ARCHIVE
+ * --------------------------------------------------------------------------
+ */
+function runWeeklySync() {
+  const sourceSs = SpreadsheetApp.getActiveSpreadsheet();
+  const targetSpreadsheetId = "1FsGH9rShk4f8T_kk1oX9_COneuOHBDRRff5wHLPh8Yo";
+  const targetSs = SpreadsheetApp.openById(targetSpreadsheetId);
+  const ui = SpreadsheetApp.getUi();
+
+  const poSheet = sourceSs.getSheetByName("Extracted PO");
+  if (poSheet) {
+    const lastRowPO = poSheet.getLastRow();
+    const lastColPO = poSheet.getLastColumn();
+    if (lastRowPO > 1) {
+      poSheet.getRange(2, 1, lastRowPO - 1, Math.max(lastColPO, 1)).clearContent();
+    }
+  }
+
+  const targetMasterSheet = targetSs.getSheetByName("Weekly Consumption Masterdata");
+  if (!targetMasterSheet) {
+    throw new Error("Sheet 'Weekly Consumption Masterdata' not found in destination workbook.");
+  }
+
+  const expectedHeaders = [
+    "Date", "Store", "Serial", "Code", "Item", "Unit", "In Stock", "Order Qty", "Approved", "Next Stock", "Consumption"
+  ];
+
+  if (targetMasterSheet.getLastRow() === 0 || targetMasterSheet.getRange("A1").getValue() !== "Date") {
+    targetMasterSheet.insertRowBefore(1);
+    const headerRange = targetMasterSheet.getRange(1, 1, 1, expectedHeaders.length);
+    headerRange.setValues([expectedHeaders])
+      .setFontWeight("bold")
+      .setBackground("#1F4E79")
+      .setFontColor("#FFFFFF")
+      .setHorizontalAlignment("center");
+    targetMasterSheet.setFrozenRows(1);
+  }
+
+  const orderSheetNames = [
+    "Beverage", "Dry Store 1", "Dry Store 2", "Dry Store 3", "Freezer 1", "Freezer 2", "General"
+  ];
+
+  const syncDate = Utilities.formatDate(new Date(), "Indian/Maldives", "yyyy-MM-dd");
+  const syncTimestamp = Utilities.formatDate(new Date(), "Indian/Maldives", "yyyy-MM-dd HH:mm:ss");
+  let newRecords = [];
+
+  orderSheetNames.forEach(sheetName => {
+    const sheet = sourceSs.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      // Fetch cols A through H (Col 1 to 8): 0:Serial, 1:Code, 2:Item, 3:Unit, 4:In Stock, 5:Order Qty, 6:Supply Type, 7:Approved
+      const values = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+      values.forEach(row => {
+        const serial = row[0];
+        const code = row[1];
+        const item = row[2];
+        const unit = row[3];
+        const inStock = row[4];
+        const orderQty = row[5];
+        const approved = row[7]; // Col H (Approved)
+
+        const hasOrderQty = (
+          orderQty !== "" &&
+          orderQty !== null &&
+          String(orderQty).trim() !== "" &&
+          !isNaN(orderQty) &&
+          Number(orderQty) > 0
+        );
+
+        if (item && hasOrderQty) {
+          newRecords.push([
+            syncDate,
+            sheetName,
+            serial,
+            code,
+            item,
+            unit,
+            inStock,
+            orderQty,
+            approved,
+            "",
+            ""
+          ]);
+        }
+      });
+    }
+  });
+
+  if (newRecords.length > 0) {
+    const nextRow = targetMasterSheet.getLastRow() + 1;
+    targetMasterSheet.getRange(nextRow, 1, newRecords.length, newRecords[0].length).setValues(newRecords);
+  }
+
+  // Clear In Stock (Col E) and Order Qty (Col F) for new week
+  orderSheetNames.forEach(sheetName => {
+    const sheet = sourceSs.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 5, lastRow - 1, 2).clearContent();
+    }
+  });
+
+  const dashSheet = targetSs.getSheetByName("Dashboard");
+  if (dashSheet) {
+    setupDashboard(dashSheet, syncTimestamp, newRecords.length, targetMasterSheet.getLastRow() - 1);
+  }
+
+  ui.alert(
+    "Weekly Sync Complete",
+    "Successfully processed weekly sync:\n" +
+    "• Records Synced: " + newRecords.length + "\n" +
+    "• 'In Stock' & 'Order Qty' reset on all 7 sheets\n" +
+    "• 'Extracted PO' cleared\n" +
+    "• Masterdata & Dashboard updated at: " + syncTimestamp,
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * STEP 4: SUNDAY ROLLOVER (RESET FOR NEW WEEK)
+ * --------------------------------------------------------------------------
+ */
+function rolloverToNewWeek() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Confirm Weekly Rollover',
+    'Are you sure you want to roll over to next week?\n\n' +
+    '• Foreign items will retain pending quantities until Monday arrival.\n' +
+    '• Local pending deliveries and delivery dates will be cleared.\n' +
+    '• Order Qty and Approved columns will be reset for fresh input.',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  const storeSheets = [
+    'Beverage',
+    'Dry Store 1',
+    'Dry Store 2',
+    'Dry Store 3',
+    'Freezer 1',
+    'Freezer 2',
+    'General'
+  ];
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  storeSheets.forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+
+    const numRows = lastRow - 1;
+    // Col F: Order Qty (6), Col G: Supply Type (7), Col H: Approved (8), Col K: Pending Qty (11), Col L: Pending Date (12)
+    const orderQtyRange = sheet.getRange(2, 6, numRows, 1);
+    const orderQtyValues = orderQtyRange.getValues();
+    const supplyTypeValues = sheet.getRange(2, 7, numRows, 1).getValues(); // Col G
+    const approvedRange = sheet.getRange(2, 8, numRows, 1); // Col H
+    const pendingRange = sheet.getRange(2, 11, numRows, 2); // Col K & L
+    const pendingValues = pendingRange.getValues();
+
+    for (let i = 0; i < numRows; i++) {
+      const supplyType = String(supplyTypeValues[i][0]).trim().toLowerCase();
+      const lastOrderQty = orderQtyValues[i][0];
+
+      if (supplyType === 'foreign') {
+        if (lastOrderQty && lastOrderQty > 0) {
+          pendingValues[i][0] = lastOrderQty;
+        } else if (!pendingValues[i][0] || pendingValues[i][0] === 0) {
+          pendingValues[i][1] = '';
+        }
+      } else {
+        pendingValues[i][0] = '';
+        pendingValues[i][1] = '';
+      }
+      orderQtyValues[i][0] = ''; // Reset Order Qty
+    }
+
+    pendingRange.setValues(pendingValues);
+    orderQtyRange.setValues(orderQtyValues);
+    approvedRange.clearContent(); // Reset Approved column without touching Supply Type!
+  });
+
+  ui.alert('Success', 'Store sheets are reset and ready for new weekly counts and orders.', ui.ButtonSet.OK);
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * HELPER FUNCTIONS
+ * --------------------------------------------------------------------------
+ */
+function formatDeliveryDateWithDay(rawDate) {
+  if (!rawDate) return '';
+  let d;
+  if (rawDate instanceof Date) {
+    d = rawDate;
+  } else {
+    const str = String(rawDate).trim();
+    const parts = str.split(/[\/\- ]/);
+    if (parts.length >= 3) {
+      if (parseInt(parts[0]) > 1000) {
+        d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      } else {
+        let year = parseInt(parts[2]);
+        if (year < 100) year += 2000;
+        d = new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0]));
+      }
+    } else {
+      d = new Date(str);
+    }
+  }
+
+  if (!d || isNaN(d.getTime())) return String(rawDate);
+
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayName = days[d.getDay()];
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm} (${dayName})`;
+}
+
+function formatSimpleDate(rawDate) {
+  if (!rawDate) return '';
+  if (rawDate instanceof Date) {
+    return Utilities.formatDate(rawDate, "Indian/Maldives", "yyyy-MM-dd");
+  }
+  return String(rawDate).trim();
+}
+
+function setupDashboard(sheet, timestamp, batchCount, totalCount) {
+  sheet.clear();
+  sheet.setHiddenGridlines(false);
+
+  sheet.getRange("B2:H2").merge()
+    .setValue("INVENTORY & CONSUMPTION DASHBOARD")
+    .setBackground("#1F4E79")
+    .setFontColor("#FFFFFF")
+    .setFontSize(16)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sheet.setRowHeight(2, 45);
+
+  sheet.getRange("B4:H4").merge()
+    .setValue("🕒 Last Synced: " + timestamp + " (Maldives Time)")
+    .setBackground("#D9E1F2")
+    .setFontColor("#1F4E79")
+    .setFontSize(12)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sheet.setRowHeight(4, 30);
+
+  sheet.getRange("B6:D6").merge().setValue("LAST BATCH RECORDS").setFontWeight("bold").setFontColor("#595959").setHorizontalAlignment("center");
+  sheet.getRange("B7:D8").merge().setValue(batchCount).setFontSize(22).setFontWeight("bold").setFontColor("#1F4E79").setHorizontalAlignment("center").setVerticalAlignment("middle").setBackground("#F2F4F8");
+
+  sheet.getRange("F6:H6").merge().setValue("TOTAL MASTER RECORDS").setFontWeight("bold").setFontColor("#595959").setHorizontalAlignment("center");
+  sheet.getRange("F7:H8").merge().setValue(totalCount).setFontSize(22).setFontWeight("bold").setFontColor("#1F4E79").setHorizontalAlignment("center").setVerticalAlignment("middle").setBackground("#F2F4F8");
+
+  sheet.getRange("B6:D8").setBorder(true, true, true, true, false, false, "#B0C4DE", SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange("F6:H8").setBorder(true, true, true, true, false, false, "#B0C4DE", SpreadsheetApp.BorderStyle.SOLID);
+
+  sheet.setColumnWidth(1, 40);
+  sheet.setColumnWidth(2, 100);
+  sheet.setColumnWidth(3, 100);
+  sheet.setColumnWidth(4, 100);
+  sheet.setColumnWidth(5, 40);
+  sheet.setColumnWidth(6, 100);
+  sheet.setColumnWidth(7, 100);
+  sheet.setColumnWidth(8, 100);
+}
